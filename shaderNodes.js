@@ -155,6 +155,28 @@ const Nodes = function() {
             }
             return false;
         },
+
+        getName: function() {
+            if (this.name != null)
+                return this.name;
+            return '[unknown]';
+        },
+
+        isInteger: function() {
+            return this.init == parent.Integer.prototype.init;
+        },
+
+        isFloat: function() {
+            return this.init == parent.Float.prototype.init;
+        },
+
+        isBoolean: function() {
+            return this.init == parent.Boolean.prototype.init;
+        },
+
+        isLiteral: function() {
+            return this.isInteger() || this.isFloat() || this.isBoolean();
+        },
     };
 
     let newElement = function(methods) {
