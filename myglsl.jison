@@ -113,7 +113,7 @@ variable_identifier:
 	;
 
 primary_expression:
-	variable_identifier { log('variable identifier'); }
+	variable_identifier
         | INTCONSTANT { $$ = new yy.Integer(@1, @1, $1); }
         | FLOATCONSTANT { $$ = new yy.Float(@1, @1, $1); }
         | BOOLCONSTANT { $$ = new yy.Boolean(@1, @1, $1); }
@@ -121,9 +121,9 @@ primary_expression:
 	;
 
 postfix_expression:
-        primary_expression { log('primary expression'); }
-        | postfix_expression LEFT_BRACKET integer_expression RIGHT_BRACKET { log('postfix'); $$ = new yy.Expression(@1, @4, $3); }
-        | function_call { log('function call'); }
+        primary_expression
+        | postfix_expression LEFT_BRACKET integer_expression RIGHT_BRACKET { $$ = new yy.Expression(@1, @4, $3); }
+        | function_call
         | postfix_expression DOT IDENTIFIER { $$ = new yy.VariableElementRef(@1, @3, $1, $3); }
         | postfix_expression INC_OP { $$ = new yy.Expression(@1, @2, $1); }
         | postfix_expression DEC_OP { $$ = new yy.Expression(@1, @2, $1); }
@@ -148,7 +148,7 @@ function_call_header_no_parameters:
 	;
 
 function_call_header_with_parameters:
-        function_call_header assignment_expression { log('function call header assignment expression'); $$ = $1; $$.addArgument($2); }
+        function_call_header assignment_expression { $$ = $1; $$.addArgument($2); }
         | function_call_header_with_parameters COMMA assignment_expression { $$ = $1; $$.addArgument($3); }
 	;
 
