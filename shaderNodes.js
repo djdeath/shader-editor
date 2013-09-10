@@ -86,7 +86,7 @@ const Nodes = function() {
     const Element = function() {
     };
     Element.prototype = {
-        init: function(begin, end) {
+        _init: function(begin, end) {
             // log('begin:' + parent.locToString(begin));
             // log('end:' + parent.locToString(end));
 
@@ -159,8 +159,8 @@ const Nodes = function() {
 
     let newElement = function(methods) {
         let klass = function() {
-            this.init(arguments[0], arguments[1]);
-            this.constructor.apply(this, Array.prototype.slice.call(arguments, 2, arguments.length));
+            this._init(arguments[0], arguments[1]);
+            this.init.apply(this, Array.prototype.slice.call(arguments, 2, arguments.length));
             // arguments.slice(1, arguments.length));
         };
         klass.prototype = new Element();
@@ -175,28 +175,28 @@ const Nodes = function() {
      */
 
     this.Float = newElement({
-        constructor: function(value) {
+        init: function(value) {
             this.value = parseFloat(value);
             parent.literals.push(this);
         },
     });
 
     this.Integer = newElement({
-        constructor: function(value) {
+        init: function(value) {
             this.value = parseInt(value);
             parent.literals.push(this);
         },
     });
 
     this.Boolean = newElement({
-        constructor: function(value) {
+        init: function(value) {
             this.value = parseBoolean(value);
             parent.literals.push(this);
         },
     });
 
     this.Variable = newElement({
-        constructor: function(name, _nameLocation) {
+        init: function(name, _nameLocation) {
             this.name = name;
             this.nameLocation = parent.loc(_nameLocation);
             parent.variables.push(this);
@@ -205,20 +205,20 @@ const Nodes = function() {
     });
 
     this.VariableRef = newElement({
-        constructor: function(name) {
+        init: function(name) {
             this.name = name;
         },
     });
 
     this.VariableElementRef = newElement({
-        constructor: function(name, field) {
+        init: function(name, field) {
             this.name = name;
             this.field = field;
         },
     });
 
     this.Function = newElement({
-        constructor: function(name, _nameLocation) {
+        init: function(name, _nameLocation) {
             this.name = name;
             this.nameLocation = parent.loc(_nameLocation);
             parent.functions.push(this);
@@ -227,14 +227,14 @@ const Nodes = function() {
     });
 
     this.Expression = newElement({
-        constructor: function() {
+        init: function() {
             for (let i = 0; i < arguments.length; i++)
                 this.addChild(arguments[i]);
         },
     });
 
     this.FunctionCall = newElement({
-        constructor: function(name) {
+        init: function(name) {
             this.name = name;
         },
     });
