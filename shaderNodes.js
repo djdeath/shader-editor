@@ -360,7 +360,8 @@ const Nodes = function() {
 
 /**/
 // let nodes = new Nodes();
-// let f = new nodes.Float({}, '1.42');
+// let f = new nodes.Float({}, {}, '1.42');
 // log(nodes.literals[0].value);
-// let i = new nodes.Integer({}, '42');
+// let i = new nodes.Integer({}, {}, '42');
 // log(nodes.literals[1].value);
+// log(f.init == nodes.Float.prototype.init);
