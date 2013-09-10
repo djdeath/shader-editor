@@ -267,7 +267,7 @@ const Nodes = function() {
 
     this.addVariableReference = function(_location, name) {
         let location = parent.loc(_location);
-        log('adding var ref ' + name + ' @ ' + parent.locToString(location));
+        //log('adding var ref ' + name + ' @ ' + parent.locToString(location));
         let v = parent.findElementInContext(location, name);
         v.addReference(location);
 
@@ -276,7 +276,7 @@ const Nodes = function() {
 
     this.addFunctionCall = function(_location, name) {
         let location = parent.loc(_location);
-        log('adding function ref ' + name + ' @ ' + parent.locToString(location));
+        //log('adding function ref ' + name + ' @ ' + parent.locToString(location));
         let v = parent.findElementInContext(location, name);
         v.addReference(location);
 
