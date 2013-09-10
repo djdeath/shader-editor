@@ -11,14 +11,14 @@ const Signals = imports.signals;
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
 
-/**/
+/* Utils */
 
 let boxToString = function(box) {
     return "" + box.x1 + "x" + box.y1 + " -> " + box.x2 + "x" + box.y2;
 };
 
 
-/**/
+/* Main setup */
 
 GtkClutter.init(null, null);
 
@@ -29,6 +29,7 @@ let win = builder.get_object('window-main');
 win.connect('destroy', Lang.bind(this, function() {
     Gtk.main_quit();
 }));
+
 
 let create = builder.get_object('button-create');
 
@@ -73,8 +74,7 @@ stage.set_content(pipelineContent);
 
 win.show_all();
 
-
-/**/
+/* Error highlight */
 
 let cleanErrorFromBuffer = function(buffer) {
     let tagTable = buffer.get_tag_table();
@@ -98,22 +98,22 @@ let showErrorAtLineOnBuffer = function(buffer, line) {
     buffer.apply_tag_by_name('error', startIter, endIter);
 };
 
-/**/
+/* Elements highlight */
 
-let currentHighlighted = null;
+let _currentHighlighted = null;
 
 let cleanHighlightFromBuffer = function(buffer) {
     let tagTable = buffer.get_tag_table();
     let tag = tagTable.lookup('highlight');
     if (tag)
         tagTable.remove(tag);
-    currentHighlighted = null;
+    _currentHighlighted = null;
 };
 
 let highlightElementOnBuffer = function(buffer, element) {
     let tagTable = buffer.get_tag_table();
 
-    if (currentHighlighted == element)
+    if (_currentHighlighted == element)
         return;
     else
         cleanHighlightFromBuffer(buffer);
@@ -138,9 +138,29 @@ let highlightElementOnBuffer = function(buffer, element) {
     addTag(element.location);
     for (let i in element.references)
         addTag(element.references[i]);
+
+    _currentHighlighted = element;
+};
+
+let hasHighlight = function(buffer) {
+    return _currentHighlighted != null;
+};
+
+let getHighlighted = function() {
+    return _currentHighlighted;
 };
 
 /**/
+
+
+/*
+gtk_text_view_get_iter_location     (GtkTextView *text_view,
+                                                         const GtkTextIter *iter,
+                                                         GdkRectangle *location);
+*/
+
+
+/* Parser handling */
 
 let buffer = builder.get_object('text-buffer');
 let labelResult = builder.get_object('label-result');
@@ -150,25 +170,28 @@ buffer.connect('changed', Lang.bind(this, function() {
                               buffer.get_end_iter(),
                               false);
 
+    if (str.length < 1)
+        return;
+
     cleanErrorFromBuffer(buffer);
     try {
         parser.yy = new Nodes.Nodes();
         parser.parse(str);
-        log('variables : ');
-        for (let i in parser.yy.variables) {
-            let v = parser.yy.variables[i];
-            log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        }
-        log('functions : ');
-        for (let i in parser.yy.functions) {
-            let v = parser.yy.functions[i];
-            log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        }
-        log('literals : ');
-        for (let i in parser.yy.literals) {
-            let v = parser.yy.literals[i];
-            log('           ' + v.value + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        }
+        // log('variables : ');
+        // for (let i in parser.yy.variables) {
+        //     let v = parser.yy.variables[i];
+        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
+        // log('functions : ');
+        // for (let i in parser.yy.functions) {
+        //     let v = parser.yy.functions[i];
+        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
+        // log('literals : ');
+        // for (let i in parser.yy.literals) {
+        //     let v = parser.yy.literals[i];
+        //     log('           ' + v.value + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
 
         /* Setup the new pipeline */
         let newPipeline = pipeline.copy();
@@ -179,6 +202,7 @@ buffer.connect('changed', Lang.bind(this, function() {
         content.pipeline = newPipeline;
         content.invalidate();
     } catch (ex) {
+        log('parse failed on : ' + str);
         log(ex);
         log(ex.name);
         log(ex.stack);
@@ -186,8 +210,9 @@ buffer.connect('changed', Lang.bind(this, function() {
     }
 }));
 
+/* Inspection handling */
 
-let textView = builder.get_object('text-view');
+let textView = builder.get_object('fragment-text-view');
 textView.connect('motion-notify-event',
                  Lang.bind(this, function(widget, event) {
                      if ((event.get_state()[1] & Gdk.ModifierType.CONTROL_MASK) != 0 &&
@@ -206,6 +231,15 @@ textView.connect('motion-notify-event',
                                  return false;
                              }
                          }
+                         for (let i in parser.yy.functions) {
+                             let f = parser.yy.functions[i];
+
+                             if (f.containsPosition(iter.get_line(), iter.get_line_offset())) {
+                                 highlightElementOnBuffer(buffer, f);
+                                 log('found function : ' + f.name);
+                                 return false;
+                             }
+                         }
                          for (let i in parser.yy.literals) {
                              let l = parser.yy.literals[i];
 
@@ -220,5 +254,63 @@ textView.connect('motion-notify-event',
 
                      return false;
                  }));
+
+/* Contextual modifier setup */
+
+let modifier = builder.get_object('modifier');
+let modifierScale = builder.get_object('modifier-scale');
+
+
+textView.connect('button-release-event',
+                 Lang.bind(this, function(widget, event) {
+                     log('button press : ' + event.get_button()[1]);
+                     log('modifier state : ' +  textView.get_modifier_mask(0));
+                     if (event.get_button()[1] == 1 &&
+                         textView.get_modifier_mask(0) == Gdk.ModifierType.CONTROL_MASK) {
+                         let element = getHighlighted();
+                         if (element && element.isLiteral()) {
+                             modifierScale.set_value(getHighlighted().value);
+                             modifier.show();
+                         }
+                         return false;
+                     }
+                     return false;
+                 }));
+
+let _currentStartOffset = -1;
+let _currentEndOffset = -1;
+modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
+    if (_currentStartOffset < 0) {
+        let element = getHighlighted();
+        let location = element.location;
+        let start = buffer.get_iter_at_line_index(location.first_line, location.first_column);
+        let end = buffer.get_iter_at_line_index(location.last_line, location.last_column);
+        _currentStartOffset = start.get_offset(start);
+        _currentEndOffset = end.get_offset(end);
+    }
+
+    let txt = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
+    let newBitTxt = '' + modifierScale.get_value();
+    let newTxt = txt.slice(0, _currentStartOffset) + modifierScale.get_value() + txt.slice(_currentEndOffset);
+    buffer.set_text(newTxt, -1);
+
+    _currentEndOffset = _currentStartOffset + newBitTxt.length;
+}));
+
+modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
+    log('enter popup window : ' + event.get_window() + ' - ' + modifier.get_window());
+    return false;
+}));
+modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
+    log('leave popup window : ' + event.get_window() + ' - ' + modifier.get_window());
+    if (event.get_window() == modifier.get_window()) {
+        _currentStartOffset = -1;
+        _currentEndOffset = -1;
+        modifier.hide();
+    }
+    return false;
+}));
+
+/**/
 
 Gtk.main();
