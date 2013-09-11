@@ -257,25 +257,37 @@ textView.connect('motion-notify-event',
 
 /* Contextual modifier setup */
 
+let getSmartBounds = function(value) {
+    if (value < 1.0)
+        return [0.0, 1.0];
+    else if (value < 10.0)
+        return [0.0, 10.0];
+    else if (value < 100.0)
+        return [0.0, 100.0];
+    return [0.0, 1.0];
+};
+
+
 let modifier = builder.get_object('modifier');
 let modifierScale = builder.get_object('modifier-scale');
 
-
-textView.connect('button-release-event',
-                 Lang.bind(this, function(widget, event) {
-                     log('button press : ' + event.get_button()[1]);
-                     log('modifier state : ' +  textView.get_modifier_mask(0));
-                     if (event.get_button()[1] == 1 &&
-                         textView.get_modifier_mask(0) == Gdk.ModifierType.CONTROL_MASK) {
-                         let element = getHighlighted();
-                         if (element && element.isLiteral()) {
-                             modifierScale.set_value(getHighlighted().value);
-                             modifier.show();
-                         }
-                         return false;
-                     }
-                     return false;
-                 }));
+textView.connect('button-release-event', Lang.bind(this, function(widget, event) {
+    log('button press : ' + event.get_button()[1]);
+    log('modifier state : ' +  textView.get_modifier_mask(0));
+    if (event.get_button()[1] == 1 &&
+        textView.get_modifier_mask(0) == Gdk.ModifierType.CONTROL_MASK) {
+        let element = getHighlighted();
+        if (element && element.isLiteral()) {
+            let value = element.value;
+            let bounds = getSmartBounds(element.value);
+            modifierScale.set_range(bounds[0], bounds[1]);
+            modifierScale.set_value(element.value);
+            modifier.show();
+        }
+        return false;
+    }
+    return false;
+}));
 
 let _currentStartOffset = -1;
 let _currentEndOffset = -1;
