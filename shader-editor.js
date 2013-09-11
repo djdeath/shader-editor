@@ -157,18 +157,25 @@ let cleanErrorFromBuffer = function(buffer) {
         tagTable.remove(tag);
 };
 
-let showErrorAtLineOnBuffer = function(buffer, line, column) {
-    log('error at  ' + line + ':' + column);
+let showErrorOnBuffer = function(buffer, location, color) {
+    log('error at  ' + location.first_line + ':' + location.first_column);
 
     let tag = new Gtk.TextTag({
         name: 'error',
-        background: 'red',
+        background: color != null ? color : 'red',
     });
     buffer.get_tag_table().add(tag);
 
-    let startIter = buffer.get_iter_at_line_index(line, column);
-    let endIter = startIter.copy();
-    endIter.forward_line();
+    let startIter = buffer.get_iter_at_line_index(location.first_line,
+                                                  location.first_column);
+    let endIter;
+    if (location.last_line > 0) {
+        endIter = buffer.get_iter_at_line_index(location.last_line,
+                                                location.last_column);
+    } else {
+        endIter = startIter.copy();
+        endIter.forward_line();
+    }
     buffer.apply_tag_by_name('error', startIter, endIter);
 };
 
@@ -254,7 +261,6 @@ pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
     updatePipelineShader();
 }));
 
-
 buffer.connect('changed', Lang.bind(this, function() {
     let str = buffer.get_text(buffer.get_start_iter(),
                               buffer.get_end_iter(),
@@ -286,11 +292,16 @@ buffer.connect('changed', Lang.bind(this, function() {
         /* Setup the new pipeline */
         currentFragmentShader = str;
         updatePipelineShader();
-    } catch (ex) {
+    } catch (ex if ex.name === 'ParsingError') {
         log('parse failed on : ' + str);
         log(ex);
         log(ex.stack);
-        showErrorAtLineOnBuffer(buffer, ex.line, ex.column);
+        showErrorOnBuffer(buffer, ex.location, '#f8855d');
+    } catch (ex if ex.name === 'SymbolError') {
+        log('parse failed on : ' + str);
+        log(ex);
+        log(ex.stack);
+        showErrorOnBuffer(buffer, ex.location, '#afc948');
     }
 }));
 

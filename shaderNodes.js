@@ -31,6 +31,15 @@ const Nodes = function() {
         };
     };
 
+    this.makeLocation = function(first_line, first_column, last_line, last_column) {
+        return {
+            first_line: first_line,
+            last_line: last_line,
+            first_column: first_column,
+            last_column: last_column,
+        };
+    };
+
     this.locToString = function(location) {
         return '(' + location.first_line + ',' + location.first_column +
             ' -> ' + location.last_line + ',' + location.last_column + ')';
@@ -41,7 +50,7 @@ const Nodes = function() {
             first_line: location.first_line,
             last_line: location.last_line,
             first_column: location.first_column,
-            last_column: location.last_line,
+            last_column: location.last_column,
         };
     };
 
@@ -71,7 +80,7 @@ const Nodes = function() {
 
         let error = new Error('Can\'t find symbol : ' + name);
         error.name = 'SymbolError';
-        error.line = location.first_line;
+        error.location = parent.copyLocation(location);
         throw error;
     };
 
@@ -288,9 +297,11 @@ const Nodes = function() {
     this.parseError = function(error, context) {
         let e = new Error(error);
         e.name = 'ParsingError';
-        e.line = context.line
-        e.column = context.loc.first_column
-        log('fuuuuuuuuuuuuuuuuuck : ' + e.line + ':' + e.column);
+        e.location = parent.makeLocation(context.line,
+                                         context.loc.first_column,
+                                         -1,
+                                         -1);
+        log('fuuuuuuuuuuuuuuuuuck : ' + e.location.first_line + ':' + e.location.first_column);
         throw e;
     };
 
