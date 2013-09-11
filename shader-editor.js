@@ -157,8 +157,8 @@ let cleanErrorFromBuffer = function(buffer) {
         tagTable.remove(tag);
 };
 
-let showErrorAtLineOnBuffer = function(buffer, line) {
-    log('error at line ' + line);
+let showErrorAtLineOnBuffer = function(buffer, line, column) {
+    log('error at  ' + line + ':' + column);
 
     let tag = new Gtk.TextTag({
         name: 'error',
@@ -166,7 +166,7 @@ let showErrorAtLineOnBuffer = function(buffer, line) {
     });
     buffer.get_tag_table().add(tag);
 
-    let startIter = buffer.get_iter_at_line(line);
+    let startIter = buffer.get_iter_at_line_index(line, column);
     let endIter = startIter.copy();
     endIter.forward_line();
     buffer.apply_tag_by_name('error', startIter, endIter);
@@ -289,9 +289,8 @@ buffer.connect('changed', Lang.bind(this, function() {
     } catch (ex) {
         log('parse failed on : ' + str);
         log(ex);
-        log(ex.name);
         log(ex.stack);
-        showErrorAtLineOnBuffer(buffer, ex.line);
+        showErrorAtLineOnBuffer(buffer, ex.line, ex.column);
     }
 }));
 

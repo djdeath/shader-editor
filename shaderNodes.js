@@ -289,7 +289,8 @@ const Nodes = function() {
         let e = new Error(error);
         e.name = 'ParsingError';
         e.line = context.line
-        log('fuuuuuuuuuuuuuuuuuck : ' + context.line + ':' + context.column);
+        e.column = context.loc.first_column
+        log('fuuuuuuuuuuuuuuuuuck : ' + e.line + ':' + e.column);
         throw e;
     };
 
