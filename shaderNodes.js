@@ -349,6 +349,9 @@ const Nodes = function() {
 
     let glslFunction = [
         'texture2D',
+        'vec2',
+        'vec3',
+        'vec4',
     ];
 
     for (let i in fragmentVariables)
