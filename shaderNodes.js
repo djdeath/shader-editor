@@ -298,7 +298,7 @@ const Nodes = function() {
         let e = new Error(error);
         e.name = 'ParsingError';
         e.location = parent.makeLocation(context.line,
-                                         context.loc.first_column,
+                                         context.loc != null ? context.loc.first_column : 0,
                                          -1,
                                          -1);
         log('fuuuuuuuuuuuuuuuuuck : ' + e.location.first_line + ':' + e.location.first_column);
