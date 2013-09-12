@@ -166,9 +166,11 @@ let showErrorOnBuffer = function(buffer, location, color) {
     });
     buffer.get_tag_table().add(tag);
 
+    let endIter = buffer.get_iter_at_line(location.first_line);
+    endIter.forward_line();
     let startIter = buffer.get_iter_at_line_index(location.first_line,
-                                                  location.first_column);
-    let endIter;
+                                                  location.first_column >= endIter.get_line_offset() ?
+                                                  Math.max(location.first_column - 1, 0) : location.first_column);
     if (location.last_line > 0) {
         endIter = buffer.get_iter_at_line_index(location.last_line,
                                                 location.last_column);
