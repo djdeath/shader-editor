@@ -1,5 +1,6 @@
 const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
+const Gio = imports.gi.Gio;
 const Gdk = imports.gi.Gdk;
 const Gtk = imports.gi.Gtk;
 const GnomeDesktop = imports.gi.GnomeDesktop;
@@ -11,6 +12,7 @@ const Signals = imports.signals;
 
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
+const DiffListener = imports.diffListener;
 
 /* Utils */
 
@@ -21,6 +23,14 @@ let boxToString = function(box) {
 
 /* Main setup */
 
+let diffs = new DiffListener.DiffListener();
+
+let saveDiffs = function() {
+    let file = Gio.File.new_for_path('./journal.json');
+    file.replace_contents(diffs.serialize(), null, false,
+                          Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+};
+
 GtkClutter.init(null, null);
 
 let builder = new Gtk.Builder();
@@ -28,6 +38,7 @@ builder.add_from_file('shader-editor.ui');
 
 let win = builder.get_object('window-main');
 win.connect('destroy', Lang.bind(this, function() {
+    saveDiffs();
     Gtk.main_quit();
 }));
 
@@ -261,6 +272,14 @@ let updatePipelineShader = function() {
 
 pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
     updatePipelineShader();
+}));
+
+buffer.connect('insert-text', Lang.bind(this, function(buf, location, text, len) {
+    diffs.insertText(location.get_offset(), text);
+}));
+buffer.connect('delete-range', Lang.bind(this, function(buf, start, end) {
+    let text = buffer.get_text(start, end, false);
+    diffs.deleteText(start.get_offset(), text);
 }));
 
 buffer.connect('changed', Lang.bind(this, function() {
