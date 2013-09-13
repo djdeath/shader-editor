@@ -35,7 +35,6 @@ const Journal = function() {
             _this._currentState = _this._diffs.getLength() - 1;
         else
             _this._currentState = Math.max(0, _this._currentState - 1);
-        log('get previous journal : ' + _this._currentState);
         return _this._diffs.reconstruct(_this._currentState);
     };
 
@@ -84,7 +83,6 @@ const Journal = function() {
     };
 
     this.canNext = function() {
-        log('can next : ' + _this._currentState + ' : ' + _this._diffs.getLength());
         return (_this._currentState != -1) && (_this._currentState < _this._diffs.getLength());
     };
 };
