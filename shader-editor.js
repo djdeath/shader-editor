@@ -83,6 +83,13 @@ const PipelineContent = new Lang.Class({
         this.emit('pipeline-updated');
     },
 
+    setColor: function(color) {
+        let _color = new Cogl.Color();
+        _color.set_from_4f(color.red, color.green, color.blue, color.alpha);
+        this._backPipeline.set_color(_color);
+        this.emit('pipeline-updated');
+    },
+
     getBackPipeline: function() {
         return this._backPipeline;
     },
@@ -97,6 +104,11 @@ Signals.addSignalMethods(PipelineContent.prototype);
 
 let pipelineContent = new PipelineContent();
 stage.set_content(pipelineContent);
+
+/* Color edition */
+builder.get_object('color-button').connect('notify::rgba', Lang.bind(this, function(button) {
+    pipelineContent.setColor(button.get_rgba());
+}));
 
 /* Layers edition */
 
