@@ -13,6 +13,7 @@ const Signals = imports.signals;
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
 const Journal = imports.journal;
+const Utils = imports.utils;
 
 /* Utils */
 
@@ -260,10 +261,33 @@ gtk_text_view_get_iter_location     (GtkTextView *text_view,
 */
 
 
-/* Parser handling */
-
 let buffer = builder.get_object('text-buffer');
-let labelResult = builder.get_object('label-result');
+
+/* Replay buttons */
+
+let playbackButton = builder.get_object('playback-button');
+let playforwardButton = builder.get_object('playforward-button');
+
+let updateReplayButtons = function(method) {
+    if (method) {
+        journal.suspendRecord();
+        buffer.set_text(journal[method](), -1);
+        journal.unsuspendRecord();
+    }
+    playbackButton.set_sensitive(journal.canPrevious());
+    playforwardButton.set_sensitive(journal.canNext());
+};
+
+playbackButton.connect('clicked', Lang.bind(this, function() {
+    updateReplayButtons('getPreviousState');
+}));
+playforwardButton.connect('clicked', Lang.bind(this, function() {
+    updateReplayButtons('getNextState');
+}));
+
+updateReplayButtons();
+
+/* Parser handling */
 let currentFragmentShader = '';
 
 let updatePipelineShader = function() {
@@ -330,79 +354,74 @@ buffer.connect('changed', Lang.bind(this, function() {
         log(ex.stack);
         showErrorOnBuffer(buffer, ex.location, '#afc948');
     }
+
+    updateReplayButtons();
 }));
 
 journal.suspendRecord();
 buffer.set_text(journal.getLastState(), -1);
 journal.unsuspendRecord();
 
-/* Replay buttons */
-
-let playbackButton = builder.get_object('playback-button');
-let playforwardButton = builder.get_object('playforward-button');
-
-let updateReplayButtons = function(method) {
-    if (method) {
-        journal.suspendRecord();
-        buffer.set_text(journal[method](), -1);
-        journal.unsuspendRecord();
-    }
-    playbackButton.set_sensitive(journal.canPrevious());
-    playforwardButton.set_sensitive(journal.canNext());
-};
-
-playbackButton.connect('clicked', Lang.bind(this, function() {
-    updateReplayButtons('getPreviousState');
-}));
-playforwardButton.connect('clicked', Lang.bind(this, function() {
-    updateReplayButtons('getNextState');
-}));
-
-updateReplayButtons();
-
-
-
 /* Inspection handling */
 
 let textView = builder.get_object('fragment-text-view');
-textView.connect('', Lang.bind(this, function(widget, event) {
 
+let showElementHighlightAt = function(x, y) {
+    if (parser.yy.literals == null ||
+        parser.yy.literals.length < 1)
+        return;
+
+    log(x + 'x' + y);
+    let iter = textView.get_iter_at_location(x, y);
+
+    for (let i in parser.yy.variables) {
+        let v = parser.yy.variables[i];
+
+        if (v.containsPosition(iter.get_line(), iter.get_line_offset())) {
+            highlightElementOnBuffer(buffer, v);
+            log('found variable : ' + v.name);
+            return false;
+        }
+    }
+    for (let i in parser.yy.functions) {
+        let f = parser.yy.functions[i];
+
+        if (f.containsPosition(iter.get_line(), iter.get_line_offset())) {
+            highlightElementOnBuffer(buffer, f);
+            log('found function : ' + f.name);
+            return false;
+        }
+    }
+    for (let i in parser.yy.literals) {
+        let l = parser.yy.literals[i];
+
+        if (l.containsPosition(iter.get_line(), iter.get_line_offset())) {
+            highlightElementOnBuffer(buffer, l);
+            log('found literal : ' + l.value);
+            return false;
+        }
+    }
+};
+
+textView.connect('key-press-event', Lang.bind(this, function(widget, event) {
+    if (event.get_keyval()[1] == Gdk.KEY_Control_L) {
+        let win = textView.get_window(Gtk.TextWindowType.WIDGET);
+        let [, x, y, mask] = win.get_device_position(Utils.getMouse());
+
+        showElementHighlightAt(x, y);
+    }
+    return false;
+}));
+textView.connect('key-release-event', Lang.bind(this, function(widget, event) {
+    if (event.get_keyval()[1] == Gdk.KEY_Control_L)
+        cleanHighlightFromBuffer(buffer);
+    return false;
 }));
 textView.connect('motion-notify-event', Lang.bind(this, function(widget, event) {
-    if ((event.get_state()[1] & Gdk.ModifierType.CONTROL_MASK) != 0 &&
-        parser.yy.literals &&
-        parser.yy.literals.length > 0) {
+    if ((event.get_state()[1] & Gdk.ModifierType.CONTROL_MASK) != 0) {
         let [, x, y] = event.get_coords();
-        //log(x + 'x' + y);
-        let iter = textView.get_iter_at_location(x, y);
-
-        for (let i in parser.yy.variables) {
-            let v = parser.yy.variables[i];
-
-            if (v.containsPosition(iter.get_line(), iter.get_line_offset())) {
-                highlightElementOnBuffer(buffer, v);
-                log('found variable : ' + v.name);
-                return false;
-            }
-        }
-        for (let i in parser.yy.functions) {
-            let f = parser.yy.functions[i];
-
-            if (f.containsPosition(iter.get_line(), iter.get_line_offset())) {
-                highlightElementOnBuffer(buffer, f);
-                log('found function : ' + f.name);
-                return false;
-            }
-        }
-        for (let i in parser.yy.literals) {
-            let l = parser.yy.literals[i];
-
-            if (l.containsPosition(iter.get_line(), iter.get_line_offset())) {
-                highlightElementOnBuffer(buffer, l);
-                log('found literal : ' + l.value);
-                return false;
-            }
-        }
+        showElementHighlightAt(x, y);
+        return false;
     }
     cleanHighlightFromBuffer(buffer);
 
