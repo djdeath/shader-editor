@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.15.3 on Wed Sep 11 16:56:24 2013 -->
+<!-- Generated with glade 3.15.3 on Fri Sep 13 11:10:55 2013 -->
 <interface>
   <!-- interface-requires gtk+ 3.10 -->
   <object class="GtkAdjustment" id="adjustment1">
@@ -147,6 +147,49 @@
         <property name="can_focus">False</property>
         <property name="orientation">vertical</property>
         <child>
+          <object class="GtkBox" id="box6">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <child>
+              <object class="GtkButton" id="playforward-button">
+                <property name="label">gtk-go-forward</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_stock">True</property>
+                <property name="always_show_image">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="pack_type">end</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="playback-button">
+                <property name="label">gtk-go-back</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_stock">True</property>
+                <property name="always_show_image">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="pack_type">end</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
           <object class="GtkBox" id="box3">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
@@ -164,7 +207,6 @@
                       <object class="GtkTextView" id="fragment-text-view">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="has_focus">True</property>
                         <property name="buffer">text-buffer</property>
                       </object>
                     </child>
@@ -363,7 +405,7 @@
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>
-            <property name="position">0</property>
+            <property name="position">1</property>
           </packing>
         </child>
         <child>
@@ -398,7 +440,7 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
-            <property name="position">1</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>

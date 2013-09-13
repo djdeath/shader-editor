@@ -20,16 +20,93 @@ let boxToString = function(box) {
     return "" + box.x1 + "x" + box.y1 + " -> " + box.x2 + "x" + box.y2;
 };
 
-
-/* Main setup */
+/* Journal stuff */
 
 let diffs = new DiffListener.DiffListener();
+let _suspendedJournal = false;
 
-let saveDiffs = function() {
+let saveJournal = function() {
     let file = Gio.File.new_for_path('./journal.json');
     file.replace_contents(diffs.serialize(), null, false,
                           Gio.FileCreateFlags.REPLACE_DESTINATION, null);
 };
+
+let loadJournal = function() {
+    try {
+        let file = Gio.File.new_for_path('./journal.json');
+        let [success, fileContent, tag] = file.load_contents(null);
+        diffs.unserialize(fileContent);
+    } catch (ex) {
+        log('No journal to start with');
+    }
+};
+
+let _currentJournalState = -1;
+
+let _needJournalReplay = function() {
+    return ((_currentJournalState != -1) &&
+            (_currentJournalState != diffs.getLength()));
+};
+
+let getPreviousJournalState = function() {
+    if (_currentJournalState == -1)
+        _currentJournalState = diffs.getLength() - 1;
+    else
+        _currentJournalState = Math.max(0, _currentJournalState - 1);
+    log('get previous journal : ' + _currentJournalState);
+    return diffs.reconstruct(_currentJournalState);
+};
+
+let getNextJournalState = function() {
+    if (_currentJournalState == -1)
+        return diffs.reconstruct();
+    else
+        _currentJournalState = Math.min(_currentJournalState + 1, diffs.getLength());
+    return diffs.reconstruct(_currentJournalState);
+};
+
+let getLastJournalState = function() {
+    return diffs.reconstruct();
+};
+
+let insertJournalText = function(offset, text) {
+    if (_suspendedJournal)
+        return;
+
+    if (_needJournalReplay()) {
+    }
+    diffs.insertText(offset, text);
+};
+
+let deleteJournalText = function(offset, text) {
+    if (_suspendedJournal)
+        return;
+
+    if (_needJournalReplay()) {
+    }
+    diffs.deleteText(offset, text);
+};
+
+let suspendJournalRecord = function() {
+    _suspendedJournal = true;
+};
+
+let unsuspendJournalRecord = function() {
+    _suspendedJournal = false;
+};
+
+let canJournalPrevious = function() {
+    return (_currentJournalState != 0) && (diffs.getLength() > 0);
+};
+
+let canJournalNext = function() {
+    log('can next : ' + _currentJournalState + ' : ' + diffs.getLength());
+    return (_currentJournalState != -1) && (_currentJournalState < diffs.getLength());
+};
+
+loadJournal();
+
+/* Main setup */
 
 GtkClutter.init(null, null);
 
@@ -38,7 +115,7 @@ builder.add_from_file('shader-editor.ui');
 
 let win = builder.get_object('window-main');
 win.connect('destroy', Lang.bind(this, function() {
-    saveDiffs();
+    saveJournal();
     Gtk.main_quit();
 }));
 
@@ -275,11 +352,11 @@ pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
 }));
 
 buffer.connect('insert-text', Lang.bind(this, function(buf, location, text, len) {
-    diffs.insertText(location.get_offset(), text);
+    insertJournalText(location.get_offset(), text);
 }));
 buffer.connect('delete-range', Lang.bind(this, function(buf, start, end) {
     let text = buffer.get_text(start, end, false);
-    diffs.deleteText(start.get_offset(), text);
+    deleteJournalText(start.get_offset(), text);
 }));
 
 buffer.connect('changed', Lang.bind(this, function() {
@@ -326,9 +403,43 @@ buffer.connect('changed', Lang.bind(this, function() {
     }
 }));
 
+suspendJournalRecord();
+buffer.set_text(getLastJournalState(), -1);
+unsuspendJournalRecord();
+
+/* Replay buttons */
+
+let playbackButton = builder.get_object('playback-button');
+let playforwardButton = builder.get_object('playforward-button');
+
+let updateReplayButtons = function() {
+    playbackButton.set_sensitive(canJournalPrevious());
+    playforwardButton.set_sensitive(canJournalNext());
+};
+
+playbackButton.connect('clicked', Lang.bind(this, function() {
+    suspendJournalRecord();
+    buffer.set_text(getPreviousJournalState(), -1);
+    unsuspendJournalRecord();
+    updateReplayButtons();
+}));
+playforwardButton.connect('clicked', Lang.bind(this, function() {
+    suspendJournalRecord();
+    buffer.set_text(getNextJournalState(), -1);
+    unsuspendJournalRecord();
+    updateReplayButtons();
+}));
+
+updateReplayButtons();
+
+
+
 /* Inspection handling */
 
 let textView = builder.get_object('fragment-text-view');
+textView.connect('', Lang.bind(this, function(widget, event) {
+
+}));
 textView.connect('motion-notify-event', Lang.bind(this, function(widget, event) {
     if ((event.get_state()[1] & Gdk.ModifierType.CONTROL_MASK) != 0 &&
         parser.yy.literals &&
@@ -407,19 +518,25 @@ textView.connect('button-release-event', Lang.bind(this, function(widget, event)
 let _currentStartOffset = -1;
 let _currentEndOffset = -1;
 modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
+    let element = getHighlighted();
+    let location = element.location;
+    let start = buffer.get_iter_at_line_index(location.first_line, location.first_column);
     if (_currentStartOffset < 0) {
-        let element = getHighlighted();
-        let location = element.location;
-        let start = buffer.get_iter_at_line_index(location.first_line, location.first_column);
         let end = buffer.get_iter_at_line_index(location.last_line, location.last_column);
         _currentStartOffset = start.get_offset(start);
         _currentEndOffset = end.get_offset(end);
     }
 
-    let txt = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
+    let end = buffer.get_iter_at_offset(_currentEndOffset);
+    buffer.delete(start, end);
+
     let newBitTxt = '' + modifierScale.get_value();
-    let newTxt = txt.slice(0, _currentStartOffset) + modifierScale.get_value() + txt.slice(_currentEndOffset);
-    buffer.set_text(newTxt, -1);
+    buffer.insert(start, newBitTxt, -1);
+
+
+    // let txt = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
+    // let newTxt = txt.slice(0, _currentStartOffset) + modifierScale.get_value() + txt.slice(_currentEndOffset);
+    // buffer.set_text(newTxt, -1);
 
     _currentEndOffset = _currentStartOffset + newBitTxt.length;
 }));
