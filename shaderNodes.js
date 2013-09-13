@@ -78,7 +78,7 @@ const Nodes = function() {
             }
         }
 
-        let error = new Error('Can\'t find symbol : ' + name);
+        let error = new Error("Can't find symbol : " + name);
         error.name = 'SymbolError';
         error.location = parent.copyLocation(location);
         throw error;
@@ -364,6 +364,24 @@ const Nodes = function() {
         'vec2',
         'vec3',
         'vec4',
+        'cos',
+        'sin',
+        'tan',
+        'asin',
+        'acos',
+        'atan',
+        'abs',
+        'ceil',
+        'clamp',
+        'floor',
+        'fract',
+        'max',
+        'min',
+        'step',
+        'smoothstep',
+        'sign',
+        'radians',
+        'degrees',
     ];
 
     for (let i in fragmentVariables)
