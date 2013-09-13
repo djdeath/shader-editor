@@ -146,7 +146,7 @@ const DiffListener = function() {
                 throw new Error('unknown operation');
             }
 
-            log(i + ' : ' + op.type + ' -> |' + ret + '|' + op.text + '|');
+            //log(i + ' : ' + op.type + ' -> |' + ret + '|' + op.text + '|');
         }
 
         return ret;
