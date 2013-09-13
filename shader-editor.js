@@ -23,6 +23,7 @@ let boxToString = function(box) {
 /* Main setup */
 
 let journal = new Journal.Journal();
+journal.load();
 
 GtkClutter.init(null, null);
 
