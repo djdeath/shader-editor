@@ -17,6 +17,7 @@ const DiffListener = function() {
     this._currentOffset = -1;
     this._operations = [];
     this._currentOperation = null;
+    this._currentStep = -1;
 
     /**/
 
@@ -35,8 +36,8 @@ const DiffListener = function() {
     let newOperation = function(methods) {
         let klass = function() {
             //this._init(type);
-            this.init.apply(this, arguments// Array.prototype.slice.call(arguments, 1, arguments.length)
-                           );
+            this.time = GLib.DateTime.new_now_local().to_unix();
+            this.init.apply(this, arguments);
         };
         klass.prototype = new Operation();
         for (let i in methods)
@@ -55,6 +56,8 @@ const DiffListener = function() {
         },
 
         _canMerge: function(op) {
+            if ((op.time - this.time) > 10)
+                return false
             return (this.offset + this.text.length) == op.offset;
         },
 
@@ -64,10 +67,10 @@ const DiffListener = function() {
     });
 
     this.Deletion = newOperation({
-        init: function(offset, length) {
+        init: function(offset, text) {
             this.type = _this.OperationType.DELETE;
             this.offset = offset;
-            this.length = length;
+            this.text = text;
         },
 
         _canMerge: function(op) {
@@ -114,20 +117,52 @@ const DiffListener = function() {
         return JSON.stringify(_this._operations);
     };
 
-    this.unseralize = function(string) {
+    this.unserialize = function(string) {
         try {
-            let ops = JSON.parser(string);
+            let ops = JSON.parse(string);
             _this._operations = ops;
         } catch (ex) {
-            log('Couldn\'t parse JSON string : ' + string);
+            log(ex);
+            log("Couldn't parse JSON string : " + string);
         }
+    };
+
+    this.reconstruct = function(state) {
+        let last = state == null ? _this._operations.length : (state >= 0 ? state : 0);
+        let ret = '';
+
+        for (let i = 0; i < last; i++) {
+            let op = _this._operations[i];
+            switch (op.type) {
+            case _this.OperationType.INSERT:
+                ret = ret.slice(0, op.offset) + op.text + ret.slice(op.offset);
+                break;
+
+            case _this.OperationType.DELETE:
+                ret = ret.slice(0, op.offset) + ret.slice(op.offset + op.text.length);
+                break;
+
+            default:
+                throw new Error('unknown operation');
+            }
+
+            log(i + ' : ' + op.type + ' -> |' + ret + '|' + op.text + '|');
+        }
+
+        return ret;
+    };
+
+    this.getLength = function() {
+        return _this._operations.length;
     };
 };
 
 /**/
-/*
-let diffs = new DiffListener();
-diffs.insertText(0, "plop");
-diffs.deleteText(2, "op");
-log(diffs.serialize());
-*/
+
+// let diffs = new DiffListener();
+// diffs.insertText(0, "plop");
+// diffs.deleteText(2, "op");
+// diffs.insertText(2, "gruik");
+// diffs.insertText(1, "gruik");
+// log(diffs.serialize());
+// log(diffs.reconstruct());
