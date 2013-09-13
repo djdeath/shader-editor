@@ -12,7 +12,7 @@ const Signals = imports.signals;
 
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
-const DiffListener = imports.diffListener;
+const Journal = imports.journal;
 
 /* Utils */
 
@@ -20,93 +20,9 @@ let boxToString = function(box) {
     return "" + box.x1 + "x" + box.y1 + " -> " + box.x2 + "x" + box.y2;
 };
 
-/* Journal stuff */
-
-let diffs = new DiffListener.DiffListener();
-let _suspendedJournal = false;
-
-let saveJournal = function() {
-    let file = Gio.File.new_for_path('./journal.json');
-    file.replace_contents(diffs.serialize(), null, false,
-                          Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-};
-
-let loadJournal = function() {
-    try {
-        let file = Gio.File.new_for_path('./journal.json');
-        let [success, fileContent, tag] = file.load_contents(null);
-        diffs.unserialize(fileContent);
-    } catch (ex) {
-        log('No journal to start with');
-    }
-};
-
-let _currentJournalState = -1;
-
-let _needJournalReplay = function() {
-    return ((_currentJournalState != -1) &&
-            (_currentJournalState != diffs.getLength()));
-};
-
-let getPreviousJournalState = function() {
-    if (_currentJournalState == -1)
-        _currentJournalState = diffs.getLength() - 1;
-    else
-        _currentJournalState = Math.max(0, _currentJournalState - 1);
-    log('get previous journal : ' + _currentJournalState);
-    return diffs.reconstruct(_currentJournalState);
-};
-
-let getNextJournalState = function() {
-    if (_currentJournalState == -1)
-        return diffs.reconstruct();
-    else
-        _currentJournalState = Math.min(_currentJournalState + 1, diffs.getLength());
-    return diffs.reconstruct(_currentJournalState);
-};
-
-let getLastJournalState = function() {
-    return diffs.reconstruct();
-};
-
-let insertJournalText = function(offset, text) {
-    if (_suspendedJournal)
-        return;
-
-    if (_needJournalReplay()) {
-    }
-    diffs.insertText(offset, text);
-};
-
-let deleteJournalText = function(offset, text) {
-    if (_suspendedJournal)
-        return;
-
-    if (_needJournalReplay()) {
-    }
-    diffs.deleteText(offset, text);
-};
-
-let suspendJournalRecord = function() {
-    _suspendedJournal = true;
-};
-
-let unsuspendJournalRecord = function() {
-    _suspendedJournal = false;
-};
-
-let canJournalPrevious = function() {
-    return (_currentJournalState != 0) && (diffs.getLength() > 0);
-};
-
-let canJournalNext = function() {
-    log('can next : ' + _currentJournalState + ' : ' + diffs.getLength());
-    return (_currentJournalState != -1) && (_currentJournalState < diffs.getLength());
-};
-
-loadJournal();
-
 /* Main setup */
+
+let journal = new Journal.Journal();
 
 GtkClutter.init(null, null);
 
@@ -115,7 +31,7 @@ builder.add_from_file('shader-editor.ui');
 
 let win = builder.get_object('window-main');
 win.connect('destroy', Lang.bind(this, function() {
-    saveJournal();
+    journal.save();
     Gtk.main_quit();
 }));
 
@@ -352,11 +268,11 @@ pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
 }));
 
 buffer.connect('insert-text', Lang.bind(this, function(buf, location, text, len) {
-    insertJournalText(location.get_offset(), text);
+    journal.insertText(location.get_offset(), text);
 }));
 buffer.connect('delete-range', Lang.bind(this, function(buf, start, end) {
     let text = buffer.get_text(start, end, false);
-    deleteJournalText(start.get_offset(), text);
+    journal.deleteText(start.get_offset(), text);
 }));
 
 buffer.connect('changed', Lang.bind(this, function() {
@@ -403,31 +319,30 @@ buffer.connect('changed', Lang.bind(this, function() {
     }
 }));
 
-suspendJournalRecord();
-buffer.set_text(getLastJournalState(), -1);
-unsuspendJournalRecord();
+journal.suspendRecord();
+buffer.set_text(journal.getLastState(), -1);
+journal.unsuspendRecord();
 
 /* Replay buttons */
 
 let playbackButton = builder.get_object('playback-button');
 let playforwardButton = builder.get_object('playforward-button');
 
-let updateReplayButtons = function() {
-    playbackButton.set_sensitive(canJournalPrevious());
-    playforwardButton.set_sensitive(canJournalNext());
+let updateReplayButtons = function(method) {
+    if (method) {
+        journal.suspendRecord();
+        buffer.set_text(journal[method](), -1);
+        journal.unsuspendRecord();
+    }
+    playbackButton.set_sensitive(journal.canPrevious());
+    playforwardButton.set_sensitive(journal.canNext());
 };
 
 playbackButton.connect('clicked', Lang.bind(this, function() {
-    suspendJournalRecord();
-    buffer.set_text(getPreviousJournalState(), -1);
-    unsuspendJournalRecord();
-    updateReplayButtons();
+    updateReplayButtons('getPreviousState');
 }));
 playforwardButton.connect('clicked', Lang.bind(this, function() {
-    suspendJournalRecord();
-    buffer.set_text(getNextJournalState(), -1);
-    unsuspendJournalRecord();
-    updateReplayButtons();
+    updateReplayButtons('getNextState');
 }));
 
 updateReplayButtons();
