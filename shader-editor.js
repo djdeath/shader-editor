@@ -9,6 +9,7 @@ const GtkClutter = imports.gi.GtkClutter;
 const Cogl = imports.gi.Cogl;
 const Lang = imports.lang;
 const Signals = imports.signals;
+const Mainloop = imports.mainloop;
 
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
@@ -444,6 +445,28 @@ let getSmartBounds = function(value) {
 let modifier = builder.get_object('modifier');
 let modifierScale = builder.get_object('modifier-scale');
 
+
+let _leaveTimeout = 0;
+
+let cancelLeaveTimeout = function() {
+    if (_leaveTimeout != 0) {
+        log('cancel timeout : ' + _leaveTimeout);
+        Mainloop.source_remove(_leaveTimeout);
+        _leaveTimeout = 0;
+    }
+};
+
+let startLeaveTimeout = function() {
+    _leaveTimeout = Mainloop.timeout_add(500, Lang.bind(this, function() {
+        _currentStartOffset = -1;
+        _currentEndOffset = -1;
+        _leaveTimeout = 0;
+        modifier.hide();
+        return false;
+    }));
+    log(_leaveTimeout);
+};
+
 textView.connect('button-release-event', Lang.bind(this, function(widget, event) {
     log('button press : ' + event.get_button()[1]);
     log('modifier state : ' +  textView.get_modifier_mask(0));
@@ -455,7 +478,7 @@ textView.connect('button-release-event', Lang.bind(this, function(widget, event)
             let bounds = getSmartBounds(element.value);
             modifierScale.set_range(bounds[0], bounds[1]);
             modifierScale.set_value(element.value);
-            modifier.show();
+            modifier.present();
         }
         return false;
     }
@@ -490,15 +513,21 @@ modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
 
 modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
     log('enter popup window : ' + event.get_window() + ' - ' + modifier.get_window());
+
+    if (event.get_window() != modifier.get_window())
+        return false;
+
+    cancelLeaveTimeout();
     return false;
 }));
 modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
     log('leave popup window : ' + event.get_window() + ' - ' + modifier.get_window());
-    if (event.get_window() == modifier.get_window()) {
-        _currentStartOffset = -1;
-        _currentEndOffset = -1;
-        modifier.hide();
-    }
+
+    if (event.get_window() != modifier.get_window())
+        return false;
+
+    cancelLeaveTimeout();
+    startLeaveTimeout();
     return false;
 }));
 
