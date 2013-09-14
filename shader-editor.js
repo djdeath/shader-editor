@@ -7,6 +7,7 @@ const GnomeDesktop = imports.gi.GnomeDesktop;
 const Clutter = imports.gi.Clutter;
 const GtkClutter = imports.gi.GtkClutter;
 const Cogl = imports.gi.Cogl;
+const GtkSource = imports.gi.GtkSource;
 const Lang = imports.lang;
 const Signals = imports.signals;
 const Mainloop = imports.mainloop;
@@ -15,6 +16,12 @@ const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
 const Journal = imports.journal;
 const Utils = imports.utils;
+
+
+GtkClutter.init(null, null);
+
+/* Fixups */
+let languageManager = GtkSource.LanguageManager.get_default();
 
 /* Utils */
 
@@ -27,8 +34,6 @@ let boxToString = function(box) {
 let journal = new Journal.Journal();
 journal.load();
 
-GtkClutter.init(null, null);
-
 let builder = new Gtk.Builder();
 builder.add_from_file('shader-editor.ui');
 
@@ -38,8 +43,10 @@ win.connect('destroy', Lang.bind(this, function() {
     Gtk.main_quit();
 }));
 
-
-let create = builder.get_object('button-create');
+let textView = builder.get_object('fragment-text-view');
+textView.set_buffer(new GtkSource.Buffer());
+let textBuffer = textView.get_buffer();
+textBuffer.set_language(languageManager.get_language('glsl'));
 
 let parser = new Parser.Parser();
 
@@ -120,11 +127,11 @@ let initializeLayers = function() {
     let layersTreeView = builder.get_object('layers-treeview');
     let layersStore = builder.get_object('layers-store');
 
-    let column = new Gtk.TreeViewColumn({ title: 'Name', });
-    let renderer = new Gtk.CellRendererText();
-    column.pack_start(renderer, true);
-    column.add_attribute(renderer, 'text', 2);
-    layersTreeView.append_column(column);
+    // let column = new Gtk.TreeViewColumn({ title: 'Name', });
+    // let renderer = new Gtk.CellRendererText();
+    // column.pack_start(renderer, true);
+    // column.add_attribute(renderer, 'text', 2);
+    // layersTreeView.append_column(column);
 
     column = new Gtk.TreeViewColumn({ title: 'Picture', });
     renderer = new Gtk.CellRendererPixbuf();
@@ -135,12 +142,24 @@ let initializeLayers = function() {
     let layerChooser = builder.get_object('layer-filechooser-dialog');
     let thumbnailFactory = GnomeDesktop.DesktopThumbnailFactory.new(GnomeDesktop.DesktopThumbnailSize.NORMAL);
     layerChooser.connect('update-preview', Lang.bind(this, function() {
-        log(layerChooser.preview_widget.width_request);
         let file = layerChooser.get_file();
         if (file) {
             let pixbuf = thumbnailFactory.generate_thumbnail(file.get_uri(), "image/");
             layerChooser.preview_widget.set_from_pixbuf(pixbuf);
         }
+    }));
+
+    layersTreeView.connect('query-tooltip', Lang.bind(this, function(wid, x, y, key_mode, tooltip) {
+        let [success, path, column, cellX, cellY] = layersTreeView.get_path_at_pos(x, y);
+        if (!success)
+            return false;
+
+        let [, iter] = layersStore.get_iter(path);
+        let layerName = layersStore.get_value(iter, 2);
+
+        tooltip.set_markup('<i>' + layerName + '</i>');
+        layersTreeView.set_tooltip_cell(tooltip, path, column, null);
+        return true;
     }));
 
     layerChooser.connect('response', Lang.bind(this, function(dialog, response) {
@@ -155,7 +174,7 @@ let initializeLayers = function() {
             let path = layersStore.get_path(iter);
             let layerId = path.get_indices()[0];
             layersStore.set(iter, [0, 1, 2],
-                            [layerChooser.preview_widget.pixbuf, file.get_uri(), 'layer' + layerId]);
+                            [layerChooser.preview_widget.pixbuf, file.get_uri(), 'cogl_sampler' + layerId]);
             pipelineContent.setLayerTexture(layerId, file.get_path());
         }
 
@@ -189,10 +208,14 @@ let showErrorOnBuffer = function(buffer, location, color) {
 
     let endIter = buffer.get_iter_at_line(location.first_line);
     endIter.forward_line();
+    log(location.first_line);
+    log('looking for start at : ' + location.first_column >= endIter.get_line_index() ?
+        Math.max(location.first_column - 1, 0) : location.first_column);
     let startIter = buffer.get_iter_at_line_index(location.first_line,
-                                                  location.first_column >= endIter.get_line_offset() ?
+                                                  location.first_column >= endIter.get_line_index() ?
                                                   Math.max(location.first_column - 1, 0) : location.first_column);
     if (location.last_line > 0) {
+        log('looking for end at : ' + location.last_column);
         endIter = buffer.get_iter_at_line_index(location.last_line,
                                                 location.last_column);
     } else {
@@ -202,7 +225,116 @@ let showErrorOnBuffer = function(buffer, location, color) {
     buffer.apply_tag_by_name('error', startIter, endIter);
 };
 
-/* Elements highlight */
+/**/
+
+
+/*
+gtk_text_view_get_iter_location     (GtkTextView *text_view,
+                                                         const GtkTextIter *iter,
+                                                         GdkRectangle *location);
+*/
+
+
+/* Replay buttons */
+
+let playbackButton = builder.get_object('playback-button');
+let playforwardButton = builder.get_object('playforward-button');
+
+let updateReplayButtons = function(method) {
+    if (method) {
+        journal.suspendRecord();
+        textBuffer.set_text(journal[method](), -1);
+        journal.unsuspendRecord();
+    }
+    playbackButton.set_sensitive(journal.canPrevious());
+    playforwardButton.set_sensitive(journal.canNext());
+};
+
+playbackButton.connect('clicked', Lang.bind(this, function() {
+    updateReplayButtons('getPreviousState');
+}));
+playforwardButton.connect('clicked', Lang.bind(this, function() {
+    updateReplayButtons('getNextState');
+}));
+
+updateReplayButtons();
+
+/* Parser handling */
+let currentFragmentShader = '';
+
+let updatePipelineShader = function() {
+    if (currentFragmentShader.length > 0) {
+        let newPipeline = pipelineContent.getBackPipeline().copy();
+        newPipeline.add_snippet(new Cogl.Snippet(Cogl.SnippetHook.FRAGMENT, '', currentFragmentShader));
+        pipelineContent.setFrontPipeline(newPipeline);
+    } else {
+        pipelineContent.setFrontPipeline(pipelineContent.getBackPipeline());
+    }
+};
+
+pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
+    updatePipelineShader();
+}));
+
+textBuffer.connect('insert-text', Lang.bind(this, function(buf, location, text, len) {
+    journal.insertText(location.get_offset(), text);
+}));
+textBuffer.connect('delete-range', Lang.bind(this, function(buf, start, end) {
+    let text = textBuffer.get_text(start, end, false);
+    journal.deleteText(start.get_offset(), text);
+}));
+
+textBuffer.connect('changed', Lang.bind(this, function() {
+    let str = textBuffer.get_text(textBuffer.get_start_iter(),
+                              textBuffer.get_end_iter(),
+                              false);
+
+    if (str.length < 1)
+        return;
+
+    cleanErrorFromBuffer(textBuffer);
+    try {
+        parser.yy = new Nodes.Nodes();
+        parser.parse(str);
+        // log('variables : ');
+        // for (let i in parser.yy.variables) {
+        //     let v = parser.yy.variables[i];
+        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
+        // log('functions : ');
+        // for (let i in parser.yy.functions) {
+        //     let v = parser.yy.functions[i];
+        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
+        // log('literals : ');
+        // for (let i in parser.yy.literals) {
+        //     let v = parser.yy.literals[i];
+        //     log('           ' + v.value + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
+        // }
+
+        /* Setup the new pipeline */
+        currentFragmentShader = str;
+        updatePipelineShader();
+    } catch (ex if ex.name === 'ParsingError') {
+        log('parse failed on : ' + str);
+        log(ex);
+        log(ex.stack);
+        showErrorOnBuffer(textBuffer, ex.location, '#f8855d');
+    } catch (ex if ex.name === 'SymbolError') {
+        log('parse failed on : ' + str);
+        log(ex);
+        log(ex.stack);
+        showErrorOnBuffer(textBuffer, ex.location, '#afc948');
+    }
+
+    updateReplayButtons();
+}));
+
+journal.suspendRecord();
+textBuffer.set_text(journal.getLastState(), -1);
+journal.unsuspendRecord();
+
+/* Inspection and elements highlight */
 
 let _currentHighlighted = null;
 
@@ -243,6 +375,9 @@ let highlightElementOnBuffer = function(buffer, element) {
     for (let i in element.references)
         addTag(element.references[i]);
 
+    // textView.set_tooltip_text(null);
+    // textView.set_tooltip_text(element.getDescription());
+
     _currentHighlighted = element;
 };
 
@@ -254,134 +389,21 @@ let getHighlighted = function() {
     return _currentHighlighted;
 };
 
-/**/
-
-
-/*
-gtk_text_view_get_iter_location     (GtkTextView *text_view,
-                                                         const GtkTextIter *iter,
-                                                         GdkRectangle *location);
-*/
-
-
-let buffer = builder.get_object('text-buffer');
-
-/* Replay buttons */
-
-let playbackButton = builder.get_object('playback-button');
-let playforwardButton = builder.get_object('playforward-button');
-
-let updateReplayButtons = function(method) {
-    if (method) {
-        journal.suspendRecord();
-        buffer.set_text(journal[method](), -1);
-        journal.unsuspendRecord();
-    }
-    playbackButton.set_sensitive(journal.canPrevious());
-    playforwardButton.set_sensitive(journal.canNext());
-};
-
-playbackButton.connect('clicked', Lang.bind(this, function() {
-    updateReplayButtons('getPreviousState');
-}));
-playforwardButton.connect('clicked', Lang.bind(this, function() {
-    updateReplayButtons('getNextState');
-}));
-
-updateReplayButtons();
-
-/* Parser handling */
-let currentFragmentShader = '';
-
-let updatePipelineShader = function() {
-    if (currentFragmentShader.length > 0) {
-        let newPipeline = pipelineContent.getBackPipeline().copy();
-        newPipeline.add_snippet(new Cogl.Snippet(Cogl.SnippetHook.FRAGMENT, '', currentFragmentShader));
-        pipelineContent.setFrontPipeline(newPipeline);
-    } else {
-        pipelineContent.setFrontPipeline(pipelineContent.getBackPipeline());
-    }
-};
-
-pipelineContent.connect('pipeline-updated', Lang.bind(this, function() {
-    updatePipelineShader();
-}));
-
-buffer.connect('insert-text', Lang.bind(this, function(buf, location, text, len) {
-    journal.insertText(location.get_offset(), text);
-}));
-buffer.connect('delete-range', Lang.bind(this, function(buf, start, end) {
-    let text = buffer.get_text(start, end, false);
-    journal.deleteText(start.get_offset(), text);
-}));
-
-buffer.connect('changed', Lang.bind(this, function() {
-    let str = buffer.get_text(buffer.get_start_iter(),
-                              buffer.get_end_iter(),
-                              false);
-
-    if (str.length < 1)
-        return;
-
-    cleanErrorFromBuffer(buffer);
-    try {
-        parser.yy = new Nodes.Nodes();
-        parser.parse(str);
-        // log('variables : ');
-        // for (let i in parser.yy.variables) {
-        //     let v = parser.yy.variables[i];
-        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
-        // log('functions : ');
-        // for (let i in parser.yy.functions) {
-        //     let v = parser.yy.functions[i];
-        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
-        // log('literals : ');
-        // for (let i in parser.yy.literals) {
-        //     let v = parser.yy.literals[i];
-        //     log('           ' + v.value + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
-
-        /* Setup the new pipeline */
-        currentFragmentShader = str;
-        updatePipelineShader();
-    } catch (ex if ex.name === 'ParsingError') {
-        log('parse failed on : ' + str);
-        log(ex);
-        log(ex.stack);
-        showErrorOnBuffer(buffer, ex.location, '#f8855d');
-    } catch (ex if ex.name === 'SymbolError') {
-        log('parse failed on : ' + str);
-        log(ex);
-        log(ex.stack);
-        showErrorOnBuffer(buffer, ex.location, '#afc948');
-    }
-
-    updateReplayButtons();
-}));
-
-journal.suspendRecord();
-buffer.set_text(journal.getLastState(), -1);
-journal.unsuspendRecord();
-
-/* Inspection handling */
-
-let textView = builder.get_object('fragment-text-view');
-
 let showElementHighlightAt = function(x, y) {
     if (parser.yy.literals == null ||
         parser.yy.literals.length < 1)
         return;
 
     log(x + 'x' + y);
+    x += textView.get_hadjustment().get_value();
+    y += textView.get_vadjustment().get_value();
     let iter = textView.get_iter_at_location(x, y);
 
     for (let i in parser.yy.variables) {
         let v = parser.yy.variables[i];
 
         if (v.containsPosition(iter.get_line(), iter.get_line_offset())) {
-            highlightElementOnBuffer(buffer, v);
+            highlightElementOnBuffer(textBuffer, v);
             log('found variable : ' + v.name);
             return false;
         }
@@ -390,7 +412,7 @@ let showElementHighlightAt = function(x, y) {
         let f = parser.yy.functions[i];
 
         if (f.containsPosition(iter.get_line(), iter.get_line_offset())) {
-            highlightElementOnBuffer(buffer, f);
+            highlightElementOnBuffer(textBuffer, f);
             log('found function : ' + f.name);
             return false;
         }
@@ -399,7 +421,7 @@ let showElementHighlightAt = function(x, y) {
         let l = parser.yy.literals[i];
 
         if (l.containsPosition(iter.get_line(), iter.get_line_offset())) {
-            highlightElementOnBuffer(buffer, l);
+            highlightElementOnBuffer(textBuffer, l);
             log('found literal : ' + l.value);
             return false;
         }
@@ -417,7 +439,7 @@ textView.connect('key-press-event', Lang.bind(this, function(widget, event) {
 }));
 textView.connect('key-release-event', Lang.bind(this, function(widget, event) {
     if (event.get_keyval()[1] == Gdk.KEY_Control_L)
-        cleanHighlightFromBuffer(buffer);
+        cleanHighlightFromBuffer(textBuffer);
     return false;
 }));
 textView.connect('motion-notify-event', Lang.bind(this, function(widget, event) {
@@ -426,7 +448,7 @@ textView.connect('motion-notify-event', Lang.bind(this, function(widget, event) 
         showElementHighlightAt(x, y);
         return false;
     }
-    cleanHighlightFromBuffer(buffer);
+    cleanHighlightFromBuffer(textBuffer);
 
     return false;
 }));
@@ -452,7 +474,6 @@ let _leaveTimeout = 0;
 
 let cancelLeaveTimeout = function() {
     if (_leaveTimeout != 0) {
-        log('cancel timeout : ' + _leaveTimeout);
         Mainloop.source_remove(_leaveTimeout);
         _leaveTimeout = 0;
     }
@@ -466,12 +487,9 @@ let startLeaveTimeout = function() {
         modifier.hide();
         return false;
     }));
-    log(_leaveTimeout);
 };
 
 textView.connect('button-release-event', Lang.bind(this, function(widget, event) {
-    log('button press : ' + event.get_button()[1]);
-    log('modifier state : ' +  textView.get_modifier_mask(0));
     if (event.get_button()[1] == 1 &&
         textView.get_modifier_mask(0) == Gdk.ModifierType.CONTROL_MASK) {
         let element = getHighlighted();
@@ -492,30 +510,28 @@ let _currentEndOffset = -1;
 modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
     let element = getHighlighted();
     let location = element.location;
-    let start = buffer.get_iter_at_line_index(location.first_line, location.first_column);
+    let start = textBuffer.get_iter_at_line_index(location.first_line, location.first_column);
     if (_currentStartOffset < 0) {
-        let end = buffer.get_iter_at_line_index(location.last_line, location.last_column);
+        let end = textBuffer.get_iter_at_line_index(location.last_line, location.last_column);
         _currentStartOffset = start.get_offset(start);
         _currentEndOffset = end.get_offset(end);
     }
 
-    let end = buffer.get_iter_at_offset(_currentEndOffset);
-    buffer.delete(start, end);
+    let end = textBuffer.get_iter_at_offset(_currentEndOffset);
+    textBuffer.delete(start, end);
 
     let newBitTxt = '' + modifierScale.get_value();
-    buffer.insert(start, newBitTxt, -1);
+    textBuffer.insert(start, newBitTxt, -1);
 
 
-    // let txt = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
+    // let txt = textBuffer.get_text(textBuffer.get_start_iter(), textBuffer.get_end_iter(), false);
     // let newTxt = txt.slice(0, _currentStartOffset) + modifierScale.get_value() + txt.slice(_currentEndOffset);
-    // buffer.set_text(newTxt, -1);
+    // textBuffer.set_text(newTxt, -1);
 
     _currentEndOffset = _currentStartOffset + newBitTxt.length;
 }));
 
 modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
-    log('enter popup window : ' + event.get_window() + ' - ' + modifier.get_window());
-
     if (event.get_window() != modifier.get_window())
         return false;
 
@@ -523,8 +539,6 @@ modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
     return false;
 }));
 modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
-    log('leave popup window : ' + event.get_window() + ' - ' + modifier.get_window());
-
     if (event.get_window() != modifier.get_window())
         return false;
 
