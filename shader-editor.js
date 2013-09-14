@@ -108,9 +108,11 @@ let pipelineContent = new PipelineContent();
 stage.set_content(pipelineContent);
 
 /* Color edition */
-builder.get_object('color-button').connect('notify::rgba', Lang.bind(this, function(button) {
+let colorButton = builder.get_object('color-button');
+colorButton.connect('notify::rgba', Lang.bind(this, function(button) {
     pipelineContent.setColor(button.get_rgba());
 }));
+colorButton.set_rgba(colorButton.get_rgba());
 
 /* Layers edition */
 
