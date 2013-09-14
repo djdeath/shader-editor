@@ -186,6 +186,10 @@ const Nodes = function() {
         isLiteral: function() {
             return this.isInteger() || this.isFloat() || this.isBoolean();
         },
+
+        isBuiltin: function() {
+            return this.init == parent.BuiltinVariable.prototype.init;
+        },
     };
 
     let newElement = function(methods) {
@@ -227,6 +231,15 @@ const Nodes = function() {
     });
 
     this.Variable = newElement({
+        init: function(name, _nameLocation) {
+            this.name = name;
+            this.nameLocation = parent.loc(_nameLocation);
+            parent.variables.push(this);
+            parent.addToContext(this);
+        },
+    });
+
+    this.BuiltinVariable = newElement({
         init: function(name, _nameLocation) {
             this.name = name;
             this.nameLocation = parent.loc(_nameLocation);
@@ -308,15 +321,15 @@ const Nodes = function() {
     /* Builtin variables */
 
     let builtinVariable = function(name) {
-        return new parent.Variable({ first_line: 1,
-                                     first_column: 0, },
-                                   { last_line: 1,
-                                     last_column: 0, },
-                                   name,
-                                   { first_line: 1,
-                                     first_column: 0,
-                                     last_line: 1,
-                                     last_column: 0, });
+        return new parent.BuiltinVariable({ first_line: 1,
+                                            first_column: 0, },
+                                          { last_line: 1,
+                                            last_column: 0, },
+                                          name,
+                                          { first_line: 1,
+                                            first_column: 0,
+                                            last_line: 1,
+                                            last_column: 0, });
     };
 
     let builtinFunction = function(name) {
