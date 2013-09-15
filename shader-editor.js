@@ -3,7 +3,6 @@ const GObject = imports.gi.GObject;
 const Gio = imports.gi.Gio;
 const Gdk = imports.gi.Gdk;
 const Gtk = imports.gi.Gtk;
-const GnomeDesktop = imports.gi.GnomeDesktop;
 const Clutter = imports.gi.Clutter;
 const GtkClutter = imports.gi.GtkClutter;
 const Cogl = imports.gi.Cogl;
@@ -15,6 +14,7 @@ const Mainloop = imports.mainloop;
 const Parser = imports.myglsl.myglsl;
 const Nodes = imports.shaderNodes;
 const Journal = imports.journal;
+const LayerManager = imports.layerManager;
 const Utils = imports.utils;
 
 
@@ -121,72 +121,9 @@ colorButton.connect('notify::rgba', Lang.bind(this, function(button) {
 }));
 colorButton.set_rgba(colorButton.get_rgba());
 
-/* Layers edition */
+/* Layer edition */
+let layerManager = new LayerManager.LayerManager(builder, pipelineContent);
 
-let initializeLayers = function() {
-    let layersTreeView = builder.get_object('layers-treeview');
-    let layersStore = builder.get_object('layers-store');
-
-    // let column = new Gtk.TreeViewColumn({ title: 'Name', });
-    // let renderer = new Gtk.CellRendererText();
-    // column.pack_start(renderer, true);
-    // column.add_attribute(renderer, 'text', 2);
-    // layersTreeView.append_column(column);
-
-    column = new Gtk.TreeViewColumn({ title: 'Picture', });
-    renderer = new Gtk.CellRendererPixbuf();
-    column.pack_start(renderer, false);
-    column.add_attribute(renderer, 'pixbuf', 0);
-    layersTreeView.append_column(column);
-
-    let layerChooser = builder.get_object('layer-filechooser-dialog');
-    let thumbnailFactory = GnomeDesktop.DesktopThumbnailFactory.new(GnomeDesktop.DesktopThumbnailSize.NORMAL);
-    layerChooser.connect('update-preview', Lang.bind(this, function() {
-        let file = layerChooser.get_file();
-        if (file) {
-            let pixbuf = thumbnailFactory.generate_thumbnail(file.get_uri(), "image/");
-            layerChooser.preview_widget.set_from_pixbuf(pixbuf);
-        }
-    }));
-
-    layersTreeView.connect('query-tooltip', Lang.bind(this, function(wid, x, y, key_mode, tooltip) {
-        let [success, path, column, cellX, cellY] = layersTreeView.get_path_at_pos(x, y);
-        if (!success)
-            return false;
-
-        let [, iter] = layersStore.get_iter(path);
-        let layerName = layersStore.get_value(iter, 2);
-
-        tooltip.set_markup('<i>' + layerName + '</i>');
-        layersTreeView.set_tooltip_cell(tooltip, path, column, null);
-        return true;
-    }));
-
-    layerChooser.connect('response', Lang.bind(this, function(dialog, response) {
-        if (response != Gtk.ResponseType.OK) {
-            layerChooser.hide();
-            return;
-        }
-
-        let file = layerChooser.get_file();
-        if (file) {
-            let iter = layersStore.append();
-            let path = layersStore.get_path(iter);
-            let layerId = path.get_indices()[0];
-            layersStore.set(iter, [0, 1, 2],
-                            [layerChooser.preview_widget.pixbuf, file.get_uri(), 'cogl_sampler' + layerId]);
-            pipelineContent.setLayerTexture(layerId, file.get_path());
-        }
-
-        layerChooser.hide();
-    }));
-
-    builder.get_object('add-layer-button')
-        .connect('clicked', Lang.bind(this, function() {
-            layerChooser.show();
-        }));
-};
-initializeLayers();
 
 /* Error highlight */
 
@@ -466,20 +403,16 @@ let getSmartBounds = function(value) {
 };
 
 
-let modifier = builder.get_object('modifier');
 let modifierScale = builder.get_object('modifier-scale');
 
-
 let _leaveTimeout = 0;
-
-let cancelLeaveTimeout = function() {
+let cancelLeaveTimeout = function(modifier) {
     if (_leaveTimeout != 0) {
         Mainloop.source_remove(_leaveTimeout);
         _leaveTimeout = 0;
     }
 };
-
-let startLeaveTimeout = function() {
+let startLeaveTimeout = function(modifier) {
     _leaveTimeout = Mainloop.timeout_add(500, Lang.bind(this, function() {
         _currentStartOffset = -1;
         _currentEndOffset = -1;
@@ -489,16 +422,48 @@ let startLeaveTimeout = function() {
     }));
 };
 
+
+let initModifier = function(modifier) {
+    modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
+        if (event.get_window() != modifier.get_window())
+            return false;
+
+        cancelLeaveTimeout(modifier);
+        return false;
+    }));
+    modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
+        if (event.get_window() != modifier.get_window())
+            return false;
+
+        cancelLeaveTimeout(modifier);
+        startLeaveTimeout(modifier);
+        return false;
+    }));
+};
+initModifier(builder.get_object('value-modifier'));
+initModifier(builder.get_object('picture-modifier'));
+
+
 textView.connect('button-release-event', Lang.bind(this, function(widget, event) {
     if (event.get_button()[1] == 1 &&
         textView.get_modifier_mask(0) == Gdk.ModifierType.CONTROL_MASK) {
         let element = getHighlighted();
-        if (element && element.isLiteral()) {
-            let value = element.value;
-            let bounds = getSmartBounds(element.value);
-            modifierScale.set_range(bounds[0], bounds[1]);
-            modifierScale.set_value(element.value);
-            modifier.present();
+        if (element) {
+            if (element.isLiteral()) {
+                let modifier = builder.get_object('value-modifier');
+                let value = element.value;
+                let bounds = getSmartBounds(element.value);
+                modifierScale.set_range(bounds[0], bounds[1]);
+                modifierScale.set_value(element.value);
+                modifier.present();
+            } else if (element.isBuiltin()) {
+                let pixbuf = layerManager.getPixbuf(element.name);
+                if (pixbuf) {
+                    let modifier = builder.get_object('picture-modifier');
+                    builder.get_object('picture-modifier-image').set_from_pixbuf(pixbuf);
+                    modifier.present();
+                }
+            }
         }
         return false;
     }
@@ -529,22 +494,6 @@ modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
     // textBuffer.set_text(newTxt, -1);
 
     _currentEndOffset = _currentStartOffset + newBitTxt.length;
-}));
-
-modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
-    if (event.get_window() != modifier.get_window())
-        return false;
-
-    cancelLeaveTimeout();
-    return false;
-}));
-modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
-    if (event.get_window() != modifier.get_window())
-        return false;
-
-    cancelLeaveTimeout();
-    startLeaveTimeout();
-    return false;
 }));
 
 /**/
