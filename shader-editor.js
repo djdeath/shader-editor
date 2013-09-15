@@ -439,6 +439,11 @@ let initModifier = function(modifier) {
         startLeaveTimeout(modifier);
         return false;
     }));
+    modifier.connect('key-release-event', Lang.bind(this, function(widget, event) {
+        if (event.get_keyval()[1] == Gdk.KEY_Control_L)
+            modifier.hide();
+        return false;
+    }));
 };
 initModifier(builder.get_object('value-modifier'));
 initModifier(builder.get_object('picture-modifier'));
