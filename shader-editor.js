@@ -440,8 +440,10 @@ let initModifier = function(modifier) {
         return false;
     }));
     modifier.connect('key-release-event', Lang.bind(this, function(widget, event) {
-        if (event.get_keyval()[1] == Gdk.KEY_Control_L)
+        if (event.get_keyval()[1] == Gdk.KEY_Control_L) {
             modifier.hide();
+            cleanHighlightFromBuffer(textBuffer);
+        }
         return false;
     }));
 };
