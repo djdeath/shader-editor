@@ -38,9 +38,9 @@ const LayerManager = function(builder, pipelineContent) {
             return false;
 
         let [, iter] = _this.layersStore.get_iter(path);
-        let layerName = _this.layersStore.get_value(iter, 2);
+        let layerId = _this.layersStore.get_value(iter, 2);
 
-        tooltip.set_markup('<i>' + layerName + '</i>');
+        tooltip.set_markup('<i>cogl_sampler' + layerId + '</i>');
         _this.layersTreeView.set_tooltip_cell(tooltip, path, column, null);
         return true;
     }));
@@ -56,8 +56,11 @@ const LayerManager = function(builder, pipelineContent) {
             let iter = _this.layersStore.append();
             let path = _this.layersStore.get_path(iter);
             let layerId = path.get_indices()[0];
-            _this.layersStore.set(iter, [0, 1, 2],
-                                  [_this.layerChooser.preview_widget.pixbuf, file.get_uri(), 'cogl_sampler' + layerId]);
+            _this.layersStore.set(iter,
+                                  [0, 1, 2],
+                                  [_this.layerChooser.preview_widget.pixbuf,
+                                   file.get_uri(),
+                                   layerId]);
             _this.pipelineContent.setLayerTexture(layerId, file.get_path());
         }
 
@@ -75,8 +78,8 @@ const LayerManager = function(builder, pipelineContent) {
             return null;
 
         do {
-            let layerName = _this.layersStore.get_value(iter, 2);
-            if (layerName == name) {
+            let layerId = _this.layersStore.get_value(iter, 2);
+            if (('cogl_sampler' + layerId) == name) {
                 let pixbuf = _this.layersStore.get_value(iter, 0);
                 return pixbuf;
             }
