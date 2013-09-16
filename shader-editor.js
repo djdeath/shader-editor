@@ -405,40 +405,7 @@ let getSmartBounds = function(value) {
 
 let modifierScale = builder.get_object('modifier-scale');
 
-let _leaveTimeout = 0;
-let cancelLeaveTimeout = function(modifier) {
-    if (_leaveTimeout != 0) {
-        Mainloop.source_remove(_leaveTimeout);
-        _leaveTimeout = 0;
-    }
-};
-let startLeaveTimeout = function(modifier) {
-    _leaveTimeout = Mainloop.timeout_add(500, Lang.bind(this, function() {
-        _currentStartOffset = -1;
-        _currentEndOffset = -1;
-        _leaveTimeout = 0;
-        modifier.hide();
-        return false;
-    }));
-};
-
-
 let initModifier = function(modifier) {
-    modifier.connect('enter-notify-event', Lang.bind(this, function(widget, event) {
-        if (event.get_window() != modifier.get_window())
-            return false;
-
-        cancelLeaveTimeout(modifier);
-        return false;
-    }));
-    modifier.connect('leave-notify-event', Lang.bind(this, function(widget, event) {
-        if (event.get_window() != modifier.get_window())
-            return false;
-
-        cancelLeaveTimeout(modifier);
-        startLeaveTimeout(modifier);
-        return false;
-    }));
     modifier.connect('key-release-event', Lang.bind(this, function(widget, event) {
         if (event.get_keyval()[1] == Gdk.KEY_Control_L) {
             modifier.hide();
