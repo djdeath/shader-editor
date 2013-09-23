@@ -446,15 +446,19 @@ textView.connect('button-release-event', Lang.bind(this, function(widget, event)
 }));
 
 let _currentStartOffset = -1;
+let _initialText = null;
 let _currentEndOffset = -1;
 modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
     let element = getHighlighted();
     let location = element.location;
     let start = textBuffer.get_iter_at_line_index(location.first_line, location.first_column);
     if (_currentStartOffset < 0) {
+        journal.suspendRecord();
+
         let end = textBuffer.get_iter_at_line_index(location.last_line, location.last_column);
-        _currentStartOffset = start.get_offset(start);
-        _currentEndOffset = end.get_offset(end);
+        _currentStartOffset = start.get_offset();
+        _currentEndOffset = end.get_offset();
+        _initialText = textBuffer.get_text(start, end, false);
     }
 
     let end = textBuffer.get_iter_at_offset(_currentEndOffset);
@@ -463,12 +467,15 @@ modifierScale.connect('value-changed', Lang.bind(this, function(widget) {
     let newBitTxt = '' + modifierScale.get_value();
     textBuffer.insert(start, newBitTxt, -1);
 
-
-    // let txt = textBuffer.get_text(textBuffer.get_start_iter(), textBuffer.get_end_iter(), false);
-    // let newTxt = txt.slice(0, _currentStartOffset) + modifierScale.get_value() + txt.slice(_currentEndOffset);
-    // textBuffer.set_text(newTxt, -1);
-
     _currentEndOffset = _currentStartOffset + newBitTxt.length;
+}));
+modifierScale.get_toplevel().connect('hide', Lang.bind(this, function(widget) {
+    journal.unsuspendRecord();
+    journal.replaceText(_currentStartOffset,
+                        _initialText,
+                        '' + modifierScale.get_value());
+
+    _currentStartOffset = -1;
 }));
 
 /**/
