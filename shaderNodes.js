@@ -190,6 +190,10 @@ const Nodes = function() {
         isBuiltin: function() {
             return this.init == parent.BuiltinVariable.prototype.init;
         },
+
+        getDescription: function() {
+            return '' + this.constructor.name;
+        },
     };
 
     let newElement = function(methods) {
