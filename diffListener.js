@@ -10,7 +10,8 @@ const DiffListener = function() {
     this.OperationType = {
         INSERT: 0,
         DELETE: 1,
-        NONE: 2,
+        REPLACE: 2,
+        NONE: 3,
     };
 
     this._currentOperation = this.OperationType.NONE;
@@ -33,24 +34,28 @@ const DiffListener = function() {
         },
     };
 
-    let newOperation = function(methods) {
+    this._typeToClass = {};
+
+    let newOperation = function(type, methods) {
         let klass = function() {
-            //this._init(type);
             this.time = GLib.DateTime.new_now_local().to_unix();
+            this.type = type;
             this.init.apply(this, arguments);
         };
         klass.prototype = new Operation();
         for (let i in methods)
             klass.prototype[i] = methods[i];
 
+        // Keep mapping type -> klass
+        _this._typeToClass[type] = klass;
+
         return klass;
     };
 
     /**/
 
-    this.Insertion = newOperation({
+    this.Insertion = newOperation(_this.OperationType.INSERT, {
         init: function(offset, text) {
-            this.type = _this.OperationType.INSERT;
             this.offset = offset;
             this.text = text;
         },
@@ -64,11 +69,14 @@ const DiffListener = function() {
         merge: function(op) {
             return new _this.Insertion(this.offset, this.text + op.text);
         },
+
+        apply: function(text) {
+            return text.slice(0, this.offset) + this.text + text.slice(this.offset);
+        },
     });
 
-    this.Deletion = newOperation({
+    this.Deletion = newOperation(_this.OperationType.DELETE, {
         init: function(offset, text) {
-            this.type = _this.OperationType.DELETE;
             this.offset = offset;
             this.text = text;
         },
@@ -79,6 +87,30 @@ const DiffListener = function() {
 
         merge: function(op) {
             return new _this.Deletion(this.offset, this.text + op.text);
+        },
+
+        apply: function(text) {
+            return text.slice(0, this.offset) + text.slice(this.offset + this.text.length);
+        },
+    });
+
+    this.Replace = newOperation(_this.OperationType.REPLACE, {
+        init: function(offset, oldText, newText) {
+            this.offset = offset;
+            this.oldText = oldText;
+            this.newText = newText;
+        },
+
+        _canMerge: function(op) {
+            return this.offset == op.offset;
+        },
+
+        merge: function(op) {
+            return new _this.Replace(this.offset, this.oldText, op.newText);
+        },
+
+        apply: function(text) {
+            return text.slice(0, this.offset) + this.newText + text.slice(this.offset + this.oldText.length)
         },
     });
 
@@ -105,6 +137,10 @@ const DiffListener = function() {
         _this.storeOperation(new _this.Deletion(offset, text));
     };
 
+    this.replaceText = function(offset, oldText, newText) {
+        _this.storeOperation(new _this.Replace(offset, oldText, newText));
+    };
+
     this.flush = function() {
         if (_this._currentOperation) {
             _this._operations.push(this._currentOperation);
@@ -118,9 +154,23 @@ const DiffListener = function() {
     };
 
     this.unserialize = function(string) {
+        let _addProtoFuncs = function(dest, src) {
+            for (let i in src)
+                dest[i] = src[i];
+        };
+
         try {
             let ops = JSON.parse(string);
             _this._operations = ops;
+
+            // Ugly, but only way to get functional objects out of the
+            // JSON parsing.
+            for (let i in _this._operations) {
+                let op = _this._operations[i];
+                _addProtoFuncs(op,
+                               _this._typeToClass[op.type].prototype);
+
+            }
         } catch (ex) {
             log(ex);
             log("Couldn't parse JSON string : " + string);
@@ -133,18 +183,7 @@ const DiffListener = function() {
 
         for (let i = 0; i < last; i++) {
             let op = _this._operations[i];
-            switch (op.type) {
-            case _this.OperationType.INSERT:
-                ret = ret.slice(0, op.offset) + op.text + ret.slice(op.offset);
-                break;
-
-            case _this.OperationType.DELETE:
-                ret = ret.slice(0, op.offset) + ret.slice(op.offset + op.text.length);
-                break;
-
-            default:
-                throw new Error('unknown operation');
-            }
+            ret = op.apply(ret);
 
             //log(i + ' : ' + op.type + ' -> |' + ret + '|' + op.text + '|');
         }
@@ -159,10 +198,21 @@ const DiffListener = function() {
 
 /**/
 
-// let diffs = new DiffListener();
-// diffs.insertText(0, "plop");
-// diffs.deleteText(2, "op");
-// diffs.insertText(2, "gruik");
-// diffs.insertText(1, "gruik");
-// log(diffs.serialize());
-// log(diffs.reconstruct());
+if (1) {
+    try {
+        let diffs = new DiffListener();
+        diffs.insertText(0, "plop");
+        diffs.deleteText(2, "op");
+        diffs.insertText(2, "gruik");
+        diffs.insertText(1, "gruik");
+        diffs.replaceText(1, "gruik", "graaa");
+        log(diffs.serialize());
+        log(diffs.reconstruct());
+
+        let diffs2 = new DiffListener();
+        diffs2.unserialize(diffs.serialize());
+        log(diffs2.reconstruct());
+    } catch (ex) {
+        log(ex);
+    }
+}

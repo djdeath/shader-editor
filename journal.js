@@ -70,6 +70,16 @@ const Journal = function() {
         _this._diffs.deleteText(offset, text);
     };
 
+    this.replaceText = function(offset, oldText, newText) {
+        if (_this._suspended)
+            return;
+
+        if (_this._needReplay()) {
+            /* TODO */
+        }
+        _this._diffs.replaceText(offset, oldText, newText);
+    },
+
     this.suspendRecord = function() {
         _this._suspended = true;
     };
