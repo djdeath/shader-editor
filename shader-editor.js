@@ -234,34 +234,19 @@ textBuffer.connect('changed', Lang.bind(this, function() {
     try {
         parser.yy = new Nodes.Nodes();
         parser.parse(str);
-        // log('variables : ');
-        // for (let i in parser.yy.variables) {
-        //     let v = parser.yy.variables[i];
-        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
-        // log('functions : ');
-        // for (let i in parser.yy.functions) {
-        //     let v = parser.yy.functions[i];
-        //     log('           ' + v.name + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
-        // log('literals : ');
-        // for (let i in parser.yy.literals) {
-        //     let v = parser.yy.literals[i];
-        //     log('           ' + v.value + '@(' + v.location.first_line + ',' + v.location.first_column + ')');
-        // }
 
         /* Setup the new pipeline */
         currentFragmentShader = str;
         updatePipelineShader();
     } catch (ex if ex.name === 'ParsingError') {
-        log('parse failed on : ' + str);
+        /*log('parse failed on : ' + str);
         log(ex);
-        log(ex.stack);
+        log(ex.stack);*/
         showErrorOnBuffer(textBuffer, ex.location, '#f8855d');
     } catch (ex if ex.name === 'SymbolError') {
-        log('parse failed on : ' + str);
+        /*log('parse failed on : ' + str);
         log(ex);
-        log(ex.stack);
+        log(ex.stack);*/
         showErrorOnBuffer(textBuffer, ex.location, '#afc948');
     }
 
