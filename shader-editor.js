@@ -179,6 +179,7 @@ let playforwardButton = builder.get_object('playforward-button');
 
 let updateReplayButtons = function(method) {
     if (method) {
+        journal.flush();
         journal.suspendRecord();
         textBuffer.set_text(journal[method](), -1);
         journal.unsuspendRecord();
