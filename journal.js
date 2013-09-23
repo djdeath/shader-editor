@@ -95,4 +95,8 @@ const Journal = function() {
     this.canNext = function() {
         return (_this._currentState != -1) && (_this._currentState < _this._diffs.getLength());
     };
+
+    this.flush = function() {
+        _this._diffs.flush();
+    };
 };
