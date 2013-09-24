@@ -162,16 +162,6 @@ let showErrorOnBuffer = function(buffer, location, color) {
     buffer.apply_tag_by_name('error', startIter, endIter);
 };
 
-/**/
-
-
-/*
-gtk_text_view_get_iter_location     (GtkTextView *text_view,
-                                                         const GtkTextIter *iter,
-                                                         GdkRectangle *location);
-*/
-
-
 /* Replay buttons */
 
 let playbackButton = builder.get_object('playback-button');
@@ -198,6 +188,7 @@ playforwardButton.connect('clicked', Lang.bind(this, function() {
 updateReplayButtons();
 
 /* Parser handling */
+
 let currentFragmentShader = '';
 
 let updatePipelineShader = function() {
