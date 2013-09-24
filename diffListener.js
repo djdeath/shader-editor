@@ -198,7 +198,7 @@ const DiffListener = function() {
 
 /**/
 
-if (1) {
+if (0) {
     try {
         let diffs = new DiffListener();
         diffs.insertText(0, "plop");
