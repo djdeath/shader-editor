@@ -1,7 +1,7 @@
 shader-editor
 =============
 
-A live shader editor
+A live shader editor witten in JS using GTK+/Clutter/Cogl
 
 
 Demos
