@@ -145,12 +145,12 @@ let showErrorOnBuffer = function(buffer, location, color) {
 
     let endIter = buffer.get_iter_at_line(location.first_line);
     endIter.forward_line();
-    log(location.first_line);
-    log('looking for start at : ' + location.first_column >= endIter.get_line_index() ?
-        Math.max(location.first_column - 1, 0) : location.first_column);
+    log('looking for start at '+
+        location.first_line + ':' + (location.first_column >= endIter.get_line_index() ?
+                                     Math.max(location.first_column - 1, 0) : location.first_column));
     let startIter = buffer.get_iter_at_line_index(location.first_line,
-                                                  location.first_column >= endIter.get_line_index() ?
-                                                  Math.max(location.first_column - 1, 0) : location.first_column);
+                                                  (location.first_column >= endIter.get_line_index() ?
+                                                   Math.max(location.first_column - 1, 0) : location.first_column));
     if (location.last_line > 0) {
         log('looking for end at : ' + location.last_column);
         endIter = buffer.get_iter_at_line_index(location.last_line,
