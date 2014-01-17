@@ -86,9 +86,10 @@ const PipelineContent = new Lang.Class({
     setLayerTexture: function(layer, filename) {
         log('set layer texture ' + layer + ' to ' + filename);
         this._backPipeline.set_layer_texture(layer,
-                                             Cogl.Texture.new_from_file(filename,
-                                                                        Cogl.TextureFlags.NO_ATLAS,
-                                                                        Cogl.PixelFormat.ANY));
+                                             Cogl.Texture2D.new_from_file(ctx,
+                                                                          filename,
+                                                                          Cogl.TextureFlags.NO_ATLAS,
+                                                                          Cogl.PixelFormat.ANY));
         this.emit('pipeline-updated');
     },
 
