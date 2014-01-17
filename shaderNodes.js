@@ -32,12 +32,12 @@ const Nodes = function() {
     };
 
     this.makeLocation = function(first_line, first_column, last_line, last_column) {
-        return {
-            first_line: first_line,
-            last_line: last_line,
-            first_column: first_column,
-            last_column: last_column,
-        };
+        return parent.loc({ first_line: first_line,
+                            first_column: first_column,
+                          },
+                          { first_line: last_line,
+                            first_column: last_column,
+                          });
     };
 
     this.locToString = function(location) {
@@ -314,10 +314,14 @@ const Nodes = function() {
     this.parseError = function(error, context) {
         let e = new Error(error);
         e.name = 'ParsingError';
-        e.location = parent.makeLocation(context.line,
-                                         context.loc != null ? context.loc.first_column : 0,
-                                         -1,
-                                         -1);
+        if (context.loc != null)
+            e.location = parent.makeLocation(context.loc.first_line,
+                                             context.loc.first_column,
+                                             context.loc.first_line,
+                                             context.loc.first_column);
+        else
+            e.location = parent.makeLocation(context.line, 0,
+                                             context.line, 0);
         log('fuuuuuuuuuuuuuuuuuck : ' + e.location.first_line + ':' + e.location.first_column);
         throw e;
     };
