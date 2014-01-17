@@ -340,9 +340,9 @@ parameter_type_specifier:
 
 init_declarator_list_unannotated:
         single_declaration
-        | init_declarator_list_unannotated COMMA IDENTIFIER
-        | init_declarator_list_unannotated COMMA IDENTIFIER LEFT_BRACKET constant_expression RIGHT_BRACKET
-        | init_declarator_list_unannotated COMMA IDENTIFIER EQUAL initializer
+        | init_declarator_list_unannotated COMMA IDENTIFIER { $$ = new yy.Variable(@2, @3, $3, @3); }
+        | init_declarator_list_unannotated COMMA IDENTIFIER LEFT_BRACKET constant_expression RIGHT_BRACKET { $$ = new yy.Variable(@2, @3, $3, @3); }
+        | init_declarator_list_unannotated COMMA IDENTIFIER EQUAL initializer { $$ = new yy.Variable(@2, @3, $3, @3); }
 	;
 
 init_declarator_list:
