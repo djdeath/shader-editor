@@ -377,7 +377,7 @@ let getSmartBounds = function(value) {
         return [0.0, 10.0];
     else if (value < 100.0)
         return [0.0, 100.0];
-    return [0.0, 1.0];
+    return [0.0, value];
 };
 
 
