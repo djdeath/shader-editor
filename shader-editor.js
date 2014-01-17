@@ -304,7 +304,8 @@ let getHighlighted = function() {
 };
 
 let showElementHighlightAt = function(x, y) {
-    if (parser.yy.literals == null ||
+    if (textBuffer.get_char_count() < 1 ||
+        parser.yy.literals == null ||
         parser.yy.literals.length < 1)
         return;
 
